@@ -1,0 +1,10 @@
+[package]
+name = "dropzone"
+version = "0.1.0"
+authors = ["iovxw <iovxw@outlook.com>"]
+
+[dependencies]
+gtk = "0.1"
+gtk-sys = "*"
+gdk = "*"
+glib = "*"
