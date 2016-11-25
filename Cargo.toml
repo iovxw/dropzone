@@ -5,6 +5,8 @@ authors = ["iovxw <iovxw@outlook.com>"]
 
 [dependencies]
 gtk = "0.1"
+# ⬇ versions specified by gtk
 gtk-sys = "*"
 gdk = "*"
 glib = "*"
+cairo-rs = "*"

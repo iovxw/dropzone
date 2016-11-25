@@ -2,6 +2,7 @@ extern crate gtk;
 extern crate gtk_sys;
 extern crate gdk;
 extern crate glib;
+extern crate cairo;
 
 use gtk::prelude::*;
 use gtk::{Label, Window, WindowType};

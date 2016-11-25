@@ -2,6 +2,7 @@
 name = "dropzone"
 version = "0.1.0"
 dependencies = [
+ "cairo-rs 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "gdk 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "glib 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "gtk 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
