@@ -5,8 +5,7 @@ extern crate glib;
 extern crate cairo;
 
 use gtk::prelude::*;
-use gtk::{Label, Window, WindowType};
-
+use gdk::prelude::*;
 use glib::translate::*;
 
 fn main() {
@@ -15,7 +14,7 @@ fn main() {
         return;
     }
 
-    let window = Window::new(WindowType::Toplevel);
+    let window = gtk::Window::new(gtk::WindowType::Toplevel);
     window.set_title("Dropzone");
     window.set_default_size(350, 70);
     window.set_keep_above(true);
@@ -23,8 +22,29 @@ fn main() {
     window.set_skip_pager_hint(true);
     window.set_deletable(false);
     window.set_decorated(false);
+    window.set_app_paintable(true);
 
-    let zone = Label::new(Some("zone"));
+    window.connect_draw(|window, _context| {
+        let cr = cairo::Context::create_from_window(&window.get_window().unwrap());
+        cr.set_source_rgba(0.0, 0.0, 0.0, 0.5);
+        cr.set_operator(cairo::Operator::Source);
+        cr.paint();
+        Inhibit(false)
+    });
+    window.connect_delete_event(|_, _| {
+        gtk::main_quit();
+        Inhibit(false)
+    });
+    let update_visual = |window: &gtk::Window, _old_screen: &Option<gdk::Screen>| {
+        let screen = gtk::WindowExt::get_screen(window).unwrap();
+        let visual = screen.get_rgba_visual();
+
+        window.set_visual(visual.as_ref());
+    };
+    update_visual(&window, &None);
+    window.connect_screen_changed(update_visual);
+
+    let zone = gtk::Label::new(Some("zone"));
     unsafe {
         // FIXME: use wrapped API
         gtk_sys::gtk_drag_dest_set(zone.to_glib_none().0,
@@ -39,14 +59,9 @@ fn main() {
             println!("{}", text);
         }
     });
-
     window.add(&zone);
-    window.show_all();
 
-    window.connect_delete_event(|_, _| {
-        gtk::main_quit();
-        Inhibit(false)
-    });
+    window.show_all();
 
     gtk::main();
 }
