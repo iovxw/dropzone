@@ -17,12 +17,9 @@ fn main() {
     let window = gtk::Window::new(gtk::WindowType::Toplevel);
     window.set_title("Dropzone");
     window.set_default_size(64, 64);
-    window.set_keep_above(true);
-    window.set_skip_taskbar_hint(true);
-    window.set_skip_pager_hint(true);
-    window.set_deletable(false);
-    window.set_decorated(false);
     window.set_app_paintable(true);
+    window.set_position(gtk::WindowPosition::Center);
+    window.set_type_hint(gdk::WindowTypeHint::Dock);
 
     window.connect_draw(|window, _context| {
         let cr = cairo::Context::create_from_window(&window.get_window().unwrap());
