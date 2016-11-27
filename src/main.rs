@@ -16,7 +16,7 @@ fn main() {
 
     let window = gtk::Window::new(gtk::WindowType::Toplevel);
     window.set_title("Dropzone");
-    window.set_default_size(350, 70);
+    window.set_default_size(64, 64);
     window.set_keep_above(true);
     window.set_skip_taskbar_hint(true);
     window.set_skip_pager_hint(true);
@@ -26,9 +26,15 @@ fn main() {
 
     window.connect_draw(|window, _context| {
         let cr = cairo::Context::create_from_window(&window.get_window().unwrap());
-        cr.set_source_rgba(0.0, 0.0, 0.0, 0.5);
+        // set window to transparent
+        cr.set_source_rgba(0.0, 0.0, 0.0, 0.0);
         cr.set_operator(cairo::Operator::Source);
         cr.paint();
+
+        // draw a circle
+        cr.set_source_rgba(0.0, 0.0, 0.0, 0.5);
+        cr.arc(32.0, 32.0, 32.0, 0.0, 2.0 * std::f64::consts::PI);
+        cr.fill();
         Inhibit(false)
     });
     window.connect_delete_event(|_, _| {
