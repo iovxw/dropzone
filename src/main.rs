@@ -8,6 +8,44 @@ use gtk::prelude::*;
 use gdk::prelude::*;
 use glib::translate::*;
 
+// make moving clones into closures more convenient
+macro_rules! clone {
+    (@param _) => ( _ );
+    (@param $x:ident) => ( $x );
+    ($($n:ident),+ => move || $body:expr) => (
+        {
+            $( let $n = $n.clone(); )+
+            move || $body
+        }
+    );
+    ($($n:ident),+ => move |$($p:tt),+| $body:expr) => (
+        {
+            $( let $n = $n.clone(); )+
+            move |$(clone!(@param $p),)+| $body
+        }
+    );
+}
+
+fn make_window_draggable(window: &gtk::Window) {
+    let mouse_position = std::rc::Rc::new(std::cell::Cell::new((0.0, 0.0)));
+    window.connect_button_press_event(clone!(mouse_position => move |_window, event| {
+        let button = event.as_ref().button;
+        if button == 1 {
+            mouse_position.set(event.get_position());
+        }
+        Inhibit(false)
+    }));
+    window.connect_motion_notify_event(move |window, event| {
+        if event.get_state().contains(gdk::ModifierType::from_bits(256).unwrap()) {
+            let (mx, my) = mouse_position.get();
+            let x = event.as_ref().x_root - mx;
+            let y = event.as_ref().y_root - my;
+            window.move_(x as i32, y as i32);
+        }
+        Inhibit(false)
+    });
+}
+
 fn main() {
     if gtk::init().is_err() {
         println!("Failed to initialize GTK.");
@@ -34,10 +72,12 @@ fn main() {
         cr.fill();
         Inhibit(false)
     });
+
     window.connect_delete_event(|_, _| {
         gtk::main_quit();
         Inhibit(false)
     });
+
     let update_visual = |window: &gtk::Window, _old_screen: &Option<gdk::Screen>| {
         let screen = gtk::WindowExt::get_screen(window).unwrap();
         let visual = screen.get_rgba_visual();
@@ -46,6 +86,8 @@ fn main() {
     };
     update_visual(&window, &None);
     window.connect_screen_changed(update_visual);
+
+    make_window_draggable(&window);
 
     let zone = gtk::Label::new(Some("zone"));
     unsafe {
