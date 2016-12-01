@@ -125,6 +125,105 @@ fn cairo_image_surface_blur(surface: &mut cairo::ImageSurface, sigma: f64) {
     }
 }
 
+fn new_window_surface(window_size: (i32, i32)) -> cairo::ImageSurface {
+    let (window_width, window_height) = window_size;
+    let window_y_center = window_height as f64 / 2.0;
+    let window_x_center = window_width as f64 / 2.0;
+    let circle_border = 5.0;
+    let shadw_sigma = 2.0;
+    let shadow_offset_x: f64 = 1.0;
+    let shadow_offset_y: f64 = 1.0;
+    let circle_radius = window_y_center - circle_border - shadow_offset_y.abs() -
+                        (shadw_sigma * 3.0);
+
+    let mut shadow =
+        cairo::ImageSurface::create(cairo::Format::ARgb32, window_width, window_height);
+    {
+        let cr = cairo::Context::new(&shadow);
+        cr.set_source_rgba(0.0, 0.0, 0.0, 0.5);
+        cr.arc(window_x_center + shadow_offset_x,
+               window_y_center + shadow_offset_y,
+               circle_radius + circle_border,
+               0.0,
+               2.0 * std::f64::consts::PI);
+        cr.fill();
+    }
+    cairo_image_surface_blur(&mut shadow, shadw_sigma);
+    let shadow_mask =
+        cairo::ImageSurface::create(cairo::Format::ARgb32, window_width, window_height);
+    {
+        let cr = cairo::Context::new(&shadow_mask);
+        cr.arc(window_x_center,
+               window_y_center,
+               circle_radius + circle_border,
+               0.0,
+               2.0 * std::f64::consts::PI);
+        cr.fill();
+        cr.set_operator(cairo::Operator::Out);
+        cr.set_source_surface(&shadow, 0.0, 0.0);
+        cr.paint();
+    }
+    let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, window_width, window_height);
+    {
+        let cr = cairo::Context::new(&surface);
+        cr.set_source_rgba(0.8, 0.8, 0.8, 0.5);
+        cr.arc(window_x_center,
+               window_y_center,
+               circle_radius + circle_border,
+               0.0,
+               2.0 * std::f64::consts::PI);
+        cr.fill();
+        cr.set_source_surface(&shadow_mask, 0.0, 0.0);
+        cr.paint();
+    }
+    let mut shadow =
+        cairo::ImageSurface::create(cairo::Format::ARgb32, window_width, window_height);
+    {
+        let cr = cairo::Context::new(&shadow);
+        cr.set_source_rgba(0.0, 0.0, 0.0, 0.5);
+        cr.arc(window_x_center + shadow_offset_x,
+               window_y_center + shadow_offset_y,
+               circle_radius,
+               0.0,
+               2.0 * std::f64::consts::PI);
+        cr.fill();
+    }
+    cairo_image_surface_blur(&mut shadow, shadw_sigma);
+    {
+        let cr = cairo::Context::new(&surface);
+        cr.set_source_surface(&shadow, 0.0, 0.0);
+        cr.paint();
+    }
+    let mask = cairo::ImageSurface::create(cairo::Format::ARgb32, window_width, window_height);
+    {
+        let cr = cairo::Context::new(&mask);
+        cr.arc(window_x_center,
+               window_y_center,
+               circle_radius,
+               0.0,
+               2.0 * std::f64::consts::PI);
+        cr.fill();
+        cr.set_operator(cairo::Operator::Out);
+        cr.set_source_surface(&surface, 0.0, 0.0);
+        cr.paint();
+    }
+    let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, window_width, window_height);
+    {
+        let cr = cairo::Context::new(&surface);
+        cr.set_source_rgba(1.0, 1.0, 1.0, 0.9);
+        cr.arc(window_x_center,
+               window_y_center,
+               circle_radius,
+               0.0,
+               2.0 * std::f64::consts::PI);
+        cr.fill();
+        cr.set_source_surface(&mask, 0.0, 0.0);
+        cr.paint();
+    }
+
+    surface
+}
+
 fn main() {
     if gtk::init().is_err() {
         println!("Failed to initialize GTK.");
@@ -138,71 +237,29 @@ fn main() {
     window.set_position(gtk::WindowPosition::Center);
     window.set_type_hint(gdk::WindowTypeHint::Dock);
 
-    window.connect_draw(|window, _context| {
+    let old_window_size = std::cell::Cell::new(None::<(i32, i32)>);
+    let old_window_surface = std::cell::RefCell::new(None::<cairo::ImageSurface>);
+    window.connect_draw(move |window, _context| {
         let wcr = cairo::Context::create_from_window(&window.get_window().unwrap());
         wcr.set_antialias(cairo::Antialias::None);
         // set window to transparent
         wcr.set_source_rgba(0.0, 0.0, 0.0, 0.0);
         wcr.set_operator(cairo::Operator::Source);
 
-        let mut shadow = cairo::ImageSurface::create(cairo::Format::ARgb32, 80, 80);
-        {
-            let cr = cairo::Context::new(&shadow);
-            cr.set_source_rgba(0.0, 0.0, 0.0, 0.5);
-            cr.arc(41.0, 41.0, 32.0, 0.0, 2.0 * std::f64::consts::PI);
-            cr.fill();
+        let window_size = window.get_size();
+        if old_window_size.get().is_some() && window_size == old_window_size.get().unwrap() {
+            // no need to redraw
+            wcr.set_source_surface(&old_window_surface.borrow()
+                                       .clone()
+                                       .unwrap(),
+                                   0.0,
+                                   0.0);
+            wcr.paint();
+            return Inhibit(false);
         }
-        cairo_image_surface_blur(&mut shadow, 2.0);
-        let shadow_mask = cairo::ImageSurface::create(cairo::Format::ARgb32, 80, 80);
-        {
-            let cr = cairo::Context::new(&shadow_mask);
-            cr.arc(40.0, 40.0, 32.0, 0.0, 2.0 * std::f64::consts::PI);
-            cr.fill();
-            cr.set_operator(cairo::Operator::Out);
-            cr.set_source_surface(&shadow, 0.0, 0.0);
-            cr.paint();
-        }
-        let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 80, 80);
-        {
-            let cr = cairo::Context::new(&surface);
-            cr.set_source_rgba(0.8, 0.8, 0.8, 0.5);
-            cr.arc(40.0, 40.0, 32.0, 0.0, 2.0 * std::f64::consts::PI);
-            cr.fill();
-            cr.set_source_surface(&shadow_mask, 0.0, 0.0);
-            cr.paint();
-        }
-        let mut shadow = cairo::ImageSurface::create(cairo::Format::ARgb32, 80, 80);
-        {
-            let cr = cairo::Context::new(&shadow);
-            cr.set_source_rgba(0.0, 0.0, 0.0, 0.5);
-            cr.arc(41.0, 41.0, 25.0, 0.0, 2.0 * std::f64::consts::PI);
-            cr.fill();
-        }
-        cairo_image_surface_blur(&mut shadow, 2.0);
-        {
-            let cr = cairo::Context::new(&surface);
-            cr.set_source_surface(&shadow, 0.0, 0.0);
-            cr.paint();
-        }
-        let mask = cairo::ImageSurface::create(cairo::Format::ARgb32, 80, 80);
-        {
-            let cr = cairo::Context::new(&mask);
-            cr.arc(40.0, 40.0, 25.0, 0.0, 2.0 * std::f64::consts::PI);
-            cr.fill();
-            cr.set_operator(cairo::Operator::Out);
-            cr.set_source_surface(&surface, 0.0, 0.0);
-            cr.paint();
-        }
-        let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 80, 80);
-        {
-            let cr = cairo::Context::new(&surface);
-            cr.set_source_rgba(1.0, 1.0, 1.0, 0.9);
-            cr.arc(40.0, 40.0, 25.0, 0.0, 2.0 * std::f64::consts::PI);
-            cr.fill();
-            cr.set_source_surface(&mask, 0.0, 0.0);
-            cr.paint();
-        }
-
+        old_window_size.set(Some(window_size));
+        let surface = new_window_surface(window_size);
+        *old_window_surface.borrow_mut() = Some(surface.clone());
 
         wcr.set_source_surface(&surface, 0.0, 0.0);
 
@@ -236,11 +293,15 @@ fn main() {
                                    gdk::DragAction::all());
     }
     zone.drag_dest_add_text_targets();
-    zone.connect_drag_data_received(|_self, _drag_context, _x, _y, data, _info, _time| {
+    zone.connect_drag_data_received(clone!(window =>
+                                           move |_self, _drag_context, _x, _y, data, _info, _time| {
         if let Some(text) = data.get_text() {
+            let (height,width) = window.get_size();
+            // FIXME: just for test
+            window.resize(height + 10, width + 10);
             println!("{}", text);
         }
-    });
+    }));
     window.add(&zone);
 
     window.show_all();
