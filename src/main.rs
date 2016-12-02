@@ -48,8 +48,7 @@ fn make_window_draggable(window: &gtk::Window) {
     });
 }
 
-// gaussian blur
-fn cairo_image_surface_blur(surface: &mut cairo::ImageSurface, sigma: f64) {
+fn cairo_image_surface_blur_alpha(surface: &mut cairo::ImageSurface, sigma: f64) {
     let width = surface.get_width();
     let height = surface.get_height();
 
@@ -79,48 +78,30 @@ fn cairo_image_surface_blur(surface: &mut cairo::ImageSurface, sigma: f64) {
     for y in 0..height {
         for x in 0..width {
             sum = 0.0;
-            let (mut amul, mut rmul, mut gmul, mut bmul) = (0.0, 0.0, 0.0, 0.0);
+            let mut amul = 0.0;
             for i in -kcenter...kcenter {
                 if (x + i) >= 0 && (x + i) < width {
-                    amul += src[(y * src_stride + (x + i) * 4 + 0) as usize] as f64 *
-                            kernel[(kcenter + i) as usize];
-                    rmul += src[(y * src_stride + (x + i) * 4 + 1) as usize] as f64 *
-                            kernel[(kcenter + i) as usize];
-                    gmul += src[(y * src_stride + (x + i) * 4 + 2) as usize] as f64 *
-                            kernel[(kcenter + i) as usize];
-                    bmul += src[(y * src_stride + (x + i) * 4 + 3) as usize] as f64 *
+                    amul += src[(y * src_stride + (x + i) * 4 + 3) as usize] as f64 *
                             kernel[(kcenter + i) as usize];
                 }
                 sum += kernel[(kcenter + i) as usize];
             }
-            src[(y * src_stride + x * 4 + 0) as usize] = (amul / sum) as u8;
-            src[(y * src_stride + x * 4 + 1) as usize] = (rmul / sum) as u8;
-            src[(y * src_stride + x * 4 + 2) as usize] = (gmul / sum) as u8;
-            src[(y * src_stride + x * 4 + 3) as usize] = (bmul / sum) as u8;
+            src[(y * src_stride + x * 4 + 3) as usize] = (amul / sum) as u8;
         }
     }
 
     for x in 0..width {
         for y in 0..height {
             sum = 0.0;
-            let (mut amul, mut rmul, mut gmul, mut bmul) = (0.0, 0.0, 0.0, 0.0);
+            let mut amul = 0.0;
             for i in -kcenter...kcenter {
                 if (y + i) >= 0 && (y + i) < height {
-                    amul += src[((y + i) * src_stride + x * 4 + 0) as usize] as f64 *
-                            kernel[(kcenter + i) as usize];
-                    rmul += src[((y + i) * src_stride + x * 4 + 1) as usize] as f64 *
-                            kernel[(kcenter + i) as usize];
-                    gmul += src[((y + i) * src_stride + x * 4 + 2) as usize] as f64 *
-                            kernel[(kcenter + i) as usize];
-                    bmul += src[((y + i) * src_stride + x * 4 + 3) as usize] as f64 *
+                    amul += src[((y + i) * src_stride + x * 4 + 3) as usize] as f64 *
                             kernel[(kcenter + i) as usize];
                 }
                 sum += kernel[(kcenter + i) as usize];
             }
-            src[(y * src_stride + x * 4 + 0) as usize] = (amul / sum) as u8;
-            src[(y * src_stride + x * 4 + 1) as usize] = (rmul / sum) as u8;
-            src[(y * src_stride + x * 4 + 2) as usize] = (gmul / sum) as u8;
-            src[(y * src_stride + x * 4 + 3) as usize] = (bmul / sum) as u8;
+            src[(y * src_stride + x * 4 + 3) as usize] = (amul / sum) as u8;
         }
     }
 }
@@ -148,7 +129,7 @@ fn new_window_surface(window_size: (i32, i32)) -> cairo::ImageSurface {
                2.0 * std::f64::consts::PI);
         cr.fill();
     }
-    cairo_image_surface_blur(&mut shadow, shadw_sigma);
+    cairo_image_surface_blur_alpha(&mut shadow, shadw_sigma);
     let shadow_mask =
         cairo::ImageSurface::create(cairo::Format::ARgb32, window_width, window_height);
     {
@@ -188,7 +169,7 @@ fn new_window_surface(window_size: (i32, i32)) -> cairo::ImageSurface {
                2.0 * std::f64::consts::PI);
         cr.fill();
     }
-    cairo_image_surface_blur(&mut shadow, shadw_sigma);
+    cairo_image_surface_blur_alpha(&mut shadow, shadw_sigma);
     {
         let cr = cairo::Context::new(&surface);
         cr.set_source_surface(&shadow, 0.0, 0.0);
