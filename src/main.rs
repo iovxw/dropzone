@@ -10,6 +10,10 @@ use gtk::prelude::*;
 use gdk::prelude::*;
 use glib::translate::*;
 
+const WINDOW_DEFAULT_WIDTH: i32 = 80;
+const WINDOW_DEFAULT_HEIGHT: i32 = 80;
+const DEFAULT_DPI: i32 = 96;
+
 // make moving clones into closures more convenient
 macro_rules! clone {
     (@param _) => ( _ );
@@ -24,6 +28,12 @@ macro_rules! clone {
         {
             $( let $n = $n.clone(); )+
             move |$(clone!(@param $p),)+| $body
+        }
+    );
+    ($($n:ident),+ => move |$($p:tt : $z:ty),+| $body:expr) => (
+        {
+            $( let $n = $n.clone(); )+
+            move |$(clone!(@param $p) : $z,)+| $body
         }
     );
 }
@@ -106,14 +116,14 @@ fn cairo_image_surface_blur_alpha(surface: &mut cairo::ImageSurface, sigma: f64)
     }
 }
 
-fn new_window_surface(window_size: (i32, i32)) -> cairo::ImageSurface {
+fn new_window_surface(window_size: (i32, i32), dpi_scale: f64) -> cairo::ImageSurface {
     let (window_width, window_height) = window_size;
     let window_y_center = window_height as f64 / 2.0;
     let window_x_center = window_width as f64 / 2.0;
-    let circle_border = 5.0;
-    let shadw_sigma = 2.0;
-    let shadow_offset_x: f64 = 1.0;
-    let shadow_offset_y: f64 = 1.0;
+    let circle_border = 5.0 * dpi_scale;
+    let shadw_sigma = 2.0 * dpi_scale;
+    let shadow_offset_x: f64 = 1.0 * dpi_scale;
+    let shadow_offset_y: f64 = 1.0 * dpi_scale;
     let circle_radius = window_y_center - circle_border - shadow_offset_y.abs() -
                         (shadw_sigma * 3.0);
 
@@ -210,17 +220,18 @@ fn main() {
         println!("Failed to initialize GTK.");
         return;
     }
+    let dpi_scale = std::rc::Rc::new(std::cell::Cell::new(1.0));
 
     let window = gtk::Window::new(gtk::WindowType::Toplevel);
     window.set_title("Dropzone");
-    window.set_default_size(80, 80);
+    window.set_default_size(WINDOW_DEFAULT_WIDTH, WINDOW_DEFAULT_WIDTH);
     window.set_app_paintable(true);
     window.set_position(gtk::WindowPosition::Center);
     window.set_type_hint(gdk::WindowTypeHint::Dock);
 
     let old_window_size = std::cell::Cell::new(None::<(i32, i32)>);
     let old_window_surface = std::cell::RefCell::new(None::<cairo::ImageSurface>);
-    window.connect_draw(move |window, _context| {
+    window.connect_draw(clone!(dpi_scale => move |window, _context| {
         let wcr = cairo::Context::create_from_window(&window.get_window().unwrap());
         wcr.set_antialias(cairo::Antialias::None);
         // set window to transparent
@@ -239,26 +250,30 @@ fn main() {
             return Inhibit(false);
         }
         old_window_size.set(Some(window_size));
-        let surface = new_window_surface(window_size);
+        let surface = new_window_surface(window_size, dpi_scale.get());
         *old_window_surface.borrow_mut() = Some(surface.clone());
 
         wcr.set_source_surface(&surface, 0.0, 0.0);
 
         wcr.paint();
         Inhibit(false)
-    });
+    }));
 
     window.connect_delete_event(|_, _| {
         gtk::main_quit();
         Inhibit(false)
     });
 
-    let update_visual = |window: &gtk::Window, _old_screen: &Option<gdk::Screen>| {
-        let screen = gtk::WindowExt::get_screen(window).unwrap();
-        let visual = screen.get_rgba_visual();
+    let update_visual =
+        clone!(dpi_scale => move |window: &gtk::Window, _old_screen: &Option<gdk::Screen>| {
+            let screen = gtk::WindowExt::get_screen(window).unwrap();
+            let visual = screen.get_rgba_visual();
+            window.set_visual(visual.as_ref());
 
-        window.set_visual(visual.as_ref());
-    };
+            dpi_scale.set(screen.get_resolution() as f64 / DEFAULT_DPI as f64);
+            window.resize((WINDOW_DEFAULT_WIDTH as f64 * dpi_scale.get()).ceil() as i32,
+                          (WINDOW_DEFAULT_HEIGHT as f64 * dpi_scale.get()).ceil() as i32);
+    });
     update_visual(&window, &None);
     window.connect_screen_changed(update_visual);
 
