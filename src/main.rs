@@ -215,6 +215,26 @@ fn new_window_surface(window_size: (i32, i32), dpi_scale: f64) -> cairo::ImageSu
     surface
 }
 
+fn calculate_icons_position(x_center: f64,
+                            y_center: f64,
+                            radius: f64,
+                            icons_num: i32)
+                            -> Vec<(f64, f64)> {
+    let mut result = Vec::with_capacity(icons_num as usize);
+
+    let angle = 360.0_f64 / icons_num as f64;
+
+    for i in 0..icons_num {
+        let radians = (angle * i as f64).to_radians();
+        let x = (radians.cos() * radius) + x_center;
+        let y = (radians.sin() * radius) + y_center;
+
+        result.push((x, y));
+    }
+
+    result
+}
+
 fn main() {
     if gtk::init().is_err() {
         println!("Failed to initialize GTK.");
@@ -231,31 +251,28 @@ fn main() {
 
     let old_window_size = std::cell::Cell::new(None::<(i32, i32)>);
     let old_window_surface = std::cell::RefCell::new(None::<cairo::ImageSurface>);
-    window.connect_draw(clone!(dpi_scale => move |window, _context| {
-        let wcr = cairo::Context::create_from_window(&window.get_window().unwrap());
-        wcr.set_antialias(cairo::Antialias::None);
-        // set window to transparent
-        wcr.set_source_rgba(0.0, 0.0, 0.0, 0.0);
-        wcr.set_operator(cairo::Operator::Source);
+    window.connect_draw(clone!(dpi_scale => move |window, cr| {
+        cr.set_operator(cairo::Operator::Source);
 
         let window_size = window.get_size();
         if old_window_size.get().is_some() && window_size == old_window_size.get().unwrap() {
             // no need to redraw
-            wcr.set_source_surface(&old_window_surface.borrow()
+            cr.set_source_surface(&old_window_surface.borrow()
                                        .clone()
                                        .unwrap(),
                                    0.0,
                                    0.0);
-            wcr.paint();
+            cr.paint();
             return Inhibit(false);
         }
         old_window_size.set(Some(window_size));
         let surface = new_window_surface(window_size, dpi_scale.get());
         *old_window_surface.borrow_mut() = Some(surface.clone());
 
-        wcr.set_source_surface(&surface, 0.0, 0.0);
+        cr.set_source_surface(&surface, 0.0, 0.0);
 
-        wcr.paint();
+        cr.paint();
+
         Inhibit(false)
     }));
 
@@ -279,26 +296,44 @@ fn main() {
 
     make_window_draggable(&window);
 
-    let zone = gtk::Label::new(Some("zone"));
-    unsafe {
-        // FIXME: use wrapped API
-        gtk_sys::gtk_drag_dest_set(zone.to_glib_none().0,
-                                   gtk_sys::GtkDestDefaults::all(),
-                                   std::ptr::null_mut(),
-                                   0,
-                                   gdk::DragAction::all());
-    }
-    zone.drag_dest_add_text_targets();
-    zone.connect_drag_data_received(clone!(window =>
-                                           move |_self, _drag_context, _x, _y, data, _info, _time| {
-        if let Some(text) = data.get_text() {
-            let (height,width) = window.get_size();
-            // FIXME: just for test
-            window.resize(height + 10, width + 10);
-            println!("{}", text);
+    let icons_box = gtk::Layout::new(None, None);
+
+    let (window_width, window_height) = window.get_size();
+    for (x, y) in calculate_icons_position(window_width as f64 / 2.0,
+                                           window_height as f64 / 2.0,
+                                           window_width as f64 / 3.0,
+                                           6) {
+        let icon_size = window_width / 3;
+        let center = icon_size as f64 / 2.0;
+
+        let icon = gtk::DrawingArea::new();
+        icon.set_size_request(icon_size, icon_size);
+
+        icon.connect_draw(move |_icon, cr| {
+            cr.set_source_rgba(1.0, 1.0, 1.0, 0.5);
+            cr.arc(center, center, center, 0.0, 2.0 * std::f64::consts::PI);
+            cr.fill();
+            Inhibit(false)
+        });
+
+        unsafe {
+            // FIXME: use wrapped API
+            gtk_sys::gtk_drag_dest_set(icon.to_glib_none().0,
+                                       gtk_sys::GtkDestDefaults::all(),
+                                       std::ptr::null_mut(),
+                                       0,
+                                       gdk::DragAction::all());
         }
-    }));
-    window.add(&zone);
+        icon.drag_dest_add_text_targets();
+        icon.connect_drag_data_received(move |_self, _drag_context, _x, _y, data, _info, _time| {
+                                            if let Some(text) = data.get_text() {
+                                                println!("{}", text);
+                                            }
+                                        });
+
+        icons_box.put(&icon, (x - center) as i32, (y - center) as i32);
+    }
+    window.add(&icons_box);
 
     window.show_all();
 
