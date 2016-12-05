@@ -7,7 +7,6 @@ extern crate glib;
 extern crate cairo;
 
 use gtk::prelude::*;
-use gdk::prelude::*;
 use glib::translate::*;
 
 const WINDOW_DEFAULT_WIDTH: i32 = 80;
