@@ -240,6 +240,17 @@ fn calculate_icons_position(x_center: f64,
     result
 }
 
+fn gtk_drag_dest_set<T: IsA<gtk::Widget> + IsA<gtk::Object>>(widget: &T) {
+    unsafe {
+        // FIXME: use wrapped API
+        gtk_sys::gtk_drag_dest_set(widget.to_glib_none().0,
+                                   gtk_sys::GtkDestDefaults::all(),
+                                   std::ptr::null_mut(),
+                                   0,
+                                   gdk::DragAction::all());
+    }
+}
+
 fn main() {
     if gtk::init().is_err() {
         println!("Failed to initialize GTK.");
@@ -302,14 +313,7 @@ fn main() {
     make_window_draggable(&window);
 
     let icons_box = gtk::Layout::new(None, None);
-    unsafe {
-        // FIXME: use wrapped API
-        gtk_sys::gtk_drag_dest_set(icons_box.to_glib_none().0,
-                                   gtk_sys::GtkDestDefaults::all(),
-                                   std::ptr::null_mut(),
-                                   0,
-                                   gdk::DragAction::all());
-    }
+    gtk_drag_dest_set(&icons_box);
     icons_box.drag_dest_add_text_targets();
     let icons_num = 6_i32;
     let icons = std::rc::Rc::new(std::cell::RefCell::new(Vec::with_capacity(icons_num as usize)));
@@ -324,14 +328,7 @@ fn main() {
             Inhibit(false)
         });
 
-        unsafe {
-            // FIXME: use wrapped API
-            gtk_sys::gtk_drag_dest_set(icon.to_glib_none().0,
-                                       gtk_sys::GtkDestDefaults::all(),
-                                       std::ptr::null_mut(),
-                                       0,
-                                       gdk::DragAction::all());
-        }
+        gtk_drag_dest_set(&icon);
         icon.drag_dest_add_text_targets();
         icon.connect_drag_data_received(move |_self, _drag_context, _x, _y, data, _info, _time| {
             if let Some(text) = data.get_text() {
@@ -371,7 +368,8 @@ fn main() {
                         };
                         let (width, _height) = icon.get_size_request();
                         let icon_size_now = if width > 0 { width } else { 0 };
-                        let icon_size = icon_size_now + ((icon_size_target - icon_size_now) / animation_step);
+                        let icon_size = icon_size_now +
+                            ((icon_size_target - icon_size_now) / animation_step);
                         let center = icon_size as f64 / 2.0;
 
                         icon.set_size_request(icon_size, icon_size);
@@ -393,7 +391,7 @@ fn main() {
         }
         true
     }));
-    icons_box.connect_drag_leave(clone!(mouse_drag_in, window, icons_box, icons, dpi_scale => move |_, _, i| {
+    icons_box.connect_drag_leave(clone!(mouse_drag_in, window, icons_box, icons => move |_, _, i| {
         if i == 0 && mouse_drag_in.get() {
             println!("LEAVE!");
             mouse_drag_in.set(false);
@@ -413,7 +411,8 @@ fn main() {
                         let icon_size_target = 0;
                         let (width, _height) = icon.get_size_request();
                         let icon_size_now = if width > 0 { width } else { 0 };
-                        let icon_size = icon_size_now + ((icon_size_target - icon_size_now) / animation_step);
+                        let icon_size = icon_size_now +
+                            ((icon_size_target - icon_size_now) / animation_step);
                         let center = icon_size as f64 / 2.0;
 
                         icon.set_size_request(icon_size, icon_size);
