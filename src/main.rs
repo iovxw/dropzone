@@ -431,7 +431,6 @@ fn main() {
 
             animation();
             gtk::timeout_add(16, animation);
-
         }
     }));
 
