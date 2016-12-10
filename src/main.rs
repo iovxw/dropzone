@@ -265,33 +265,6 @@ fn main() {
     window.set_position(gtk::WindowPosition::Center);
     window.set_type_hint(gdk::WindowTypeHint::Dock);
 
-    let old_window_size = std::cell::Cell::new(None::<(i32, i32)>);
-    let old_window_surface = std::cell::RefCell::new(None::<cairo::ImageSurface>);
-    window.connect_draw(clone!(dpi_scale => move |window, cr| {
-        cr.set_operator(cairo::Operator::Source);
-
-        let window_size = window.get_size();
-        if old_window_size.get().is_some() && window_size == old_window_size.get().unwrap() {
-            // no need to redraw
-            cr.set_source_surface(&old_window_surface.borrow()
-                                       .clone()
-                                       .unwrap(),
-                                   0.0,
-                                   0.0);
-            cr.paint();
-            return Inhibit(false);
-        }
-        old_window_size.set(Some(window_size));
-        let surface = new_window_surface(window_size, dpi_scale.get());
-        *old_window_surface.borrow_mut() = Some(surface.clone());
-
-        cr.set_source_surface(&surface, 0.0, 0.0);
-
-        cr.paint();
-
-        Inhibit(false)
-    }));
-
     window.connect_delete_event(|_, _| {
         gtk::main_quit();
         Inhibit(false)
@@ -313,8 +286,22 @@ fn main() {
     make_window_draggable(&window);
 
     let icons_box = gtk::Layout::new(None, None);
-    gtk_drag_dest_set(&icons_box);
-    icons_box.drag_dest_add_text_targets();
+
+    let main_icon = gtk::DrawingArea::new();
+    gtk_drag_dest_set(&main_icon);
+    main_icon.drag_dest_add_text_targets();
+    let (width, height) = window.get_size();
+    main_icon.set_size_request(width, height);
+    main_icon.connect_draw(clone!(dpi_scale => move |icon, cr| {
+        let (width, height) = icon.get_size_request();
+        let surface = new_window_surface((width, height), dpi_scale.get());
+
+        cr.set_source_surface(&surface, 0.0, 0.0);
+        cr.paint();
+        Inhibit(false)
+    }));
+    icons_box.put(&main_icon, 0, 0);
+
     let icons_num = 6_i32;
     let icons = std::rc::Rc::new(std::cell::RefCell::new(Vec::with_capacity(icons_num as usize)));
     for _ in 0..icons_num {
@@ -342,20 +329,29 @@ fn main() {
     }
 
     let mouse_drag_in = std::rc::Rc::new(std::cell::Cell::new(false));
-    icons_box.connect_drag_motion(clone!(mouse_drag_in, window, icons, dpi_scale =>
-                                         move |icons_box, _context, _x, _y, _time| {
+    main_icon.connect_drag_motion(clone!(mouse_drag_in, window, icons, dpi_scale, icons_box =>
+                                         move |main_icon, _context, _x, _y, _time| {
         if !mouse_drag_in.get() {
             println!("ENTER!");
             mouse_drag_in.set(true);
             let mut animation_step = 10;
             let mut animation = {
                 let window = window.clone();
+                let main_icon = main_icon.clone();
                 let icons_box = icons_box.clone();
                 let icons = icons.clone();
                 let dpi_scale = dpi_scale.clone();
                 let mouse_drag_in = mouse_drag_in.clone();
                 move || -> gtk::Continue {
                     let (window_width, window_height) = window.get_size();
+                    let (width, _height) = main_icon.get_size_request();
+                    let main_icon_size_now = if width > 0 { width } else { 0 };
+                    let main_icon_size_target = 0;
+                    let main_icon_size = main_icon_size_now +
+                        ((main_icon_size_target - main_icon_size_now) / animation_step);
+                    let center = main_icon_size / 2;
+                    main_icon.set_size_request(main_icon_size, main_icon_size);
+                    icons_box.move_(&main_icon, window_width / 2 - center, window_height / 2 - center);
                     for (i, &(x, y)) in calculate_icons_position(window_width as f64 / 2.0,
                                                                  window_height as f64 / 2.0,
                                                                  window_width as f64 / 3.0,
@@ -391,48 +387,48 @@ fn main() {
         }
         true
     }));
-    icons_box.connect_drag_leave(clone!(mouse_drag_in, window, icons_box, icons => move |_, _, i| {
-        if i == 0 && mouse_drag_in.get() {
-            println!("LEAVE!");
-            mouse_drag_in.set(false);
-            let mut animation_step = 10;
-            let mut animation = {
-                let window = window.clone();
-                let icons_box = icons_box.clone();
-                let icons = icons.clone();
-                let mouse_drag_in = mouse_drag_in.clone();
-                move || -> gtk::Continue {
-                    let (window_width, window_height) = window.get_size();
-                    for (i, &(x, y)) in calculate_icons_position(window_width as f64 / 2.0,
-                                                                 window_height as f64 / 2.0,
-                                                                 window_width as f64 / 3.0,
-                                                                 icons_num).iter().enumerate() {
-                        let icon = &icons.borrow()[i];
-                        let icon_size_target = 0;
-                        let (width, _height) = icon.get_size_request();
-                        let icon_size_now = if width > 0 { width } else { 0 };
-                        let icon_size = icon_size_now +
-                            ((icon_size_target - icon_size_now) / animation_step);
-                        let center = icon_size as f64 / 2.0;
-
-                        icon.set_size_request(icon_size, icon_size);
-
-                        icons_box.move_(icon, (x - center) as i32, (y - center) as i32);
-                        icon.show();
-                    }
-                    animation_step -= 1;
-                    if animation_step > 0 && !mouse_drag_in.get() {
-                        Continue(true)
-                    } else {
-                        Continue(false)
-                    }
-                }
-            };
-
-            animation();
-            gtk::timeout_add(16, animation);
-        }
-    }));
+    // icons_box.connect_drag_leave(clone!(mouse_drag_in, window, icons_box, icons => move |_, _, i| {
+    //     if i == 0 && mouse_drag_in.get() {
+    //         println!("LEAVE!");
+    //         mouse_drag_in.set(false);
+    //         let mut animation_step = 10;
+    //         let mut animation = {
+    //             let window = window.clone();
+    //             let icons_box = icons_box.clone();
+    //             let icons = icons.clone();
+    //             let mouse_drag_in = mouse_drag_in.clone();
+    //             move || -> gtk::Continue {
+    //                 let (window_width, window_height) = window.get_size();
+    //                 for (i, &(x, y)) in calculate_icons_position(window_width as f64 / 2.0,
+    //                                                              window_height as f64 / 2.0,
+    //                                                              window_width as f64 / 3.0,
+    //                                                              icons_num).iter().enumerate() {
+    //                     let icon = &icons.borrow()[i];
+    //                     let icon_size_target = 0;
+    //                     let (width, _height) = icon.get_size_request();
+    //                     let icon_size_now = if width > 0 { width } else { 0 };
+    //                     let icon_size = icon_size_now +
+    //                         ((icon_size_target - icon_size_now) / animation_step);
+    //                     let center = icon_size as f64 / 2.0;
+    //
+    //                     icon.set_size_request(icon_size, icon_size);
+    //
+    //                     icons_box.move_(icon, (x - center) as i32, (y - center) as i32);
+    //                     icon.show();
+    //                 }
+    //                 animation_step -= 1;
+    //                 if animation_step > 0 && !mouse_drag_in.get() {
+    //                     Continue(true)
+    //                 } else {
+    //                     Continue(false)
+    //                 }
+    //             }
+    //         };
+    //
+    //         animation();
+    //         gtk::timeout_add(16, animation);
+    //     }
+    // }));
 
     window.add(&icons_box);
 
