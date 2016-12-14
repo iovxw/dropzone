@@ -354,12 +354,38 @@ fn main() {
 
     for _ in 0..icons_num {
         let icon = gtk::DrawingArea::new();
+        let dpi_scale = dpi_scale.clone();
         icon.connect_draw(move |icon, cr| {
-            let (width, _height) = icon.get_size_request();
-            let center = width as f64 / 2.0;
-            cr.set_source_rgba(1.0, 1.0, 1.0, 0.5);
-            cr.arc(center, center, center, 0.0, 2.0 * std::f64::consts::PI);
-            cr.fill();
+            let (width, height) = icon.get_size_request();
+            if width > 0 && height > 0 {
+                let border_width = 2.0 * dpi_scale.get();
+                let center = width as f64 / 2.0;
+                let radius = center - border_width;
+
+                let border = cairo::ImageSurface::create(cairo::Format::ARgb32, width, height);
+                {
+                    let cr = cairo::Context::new(&border);
+                    cr.set_source_rgba(0.0, 0.0, 0.0, 0.5);
+                    cr.arc(center, center, center, 0.0, 2.0 * std::f64::consts::PI);
+                    cr.fill();
+                }
+                let border_mask = cairo::ImageSurface::create(cairo::Format::ARgb32, width, height);
+                {
+                    let cr = cairo::Context::new(&border_mask);
+                    cr.arc(center, center, radius, 0.0, 2.0 * std::f64::consts::PI);
+                    cr.fill();
+                    cr.set_operator(cairo::Operator::Out);
+                    cr.set_source_surface(&border, 0.0, 0.0);
+                    cr.paint();
+                }
+                cr.set_source_surface(&border_mask, 0.0, 0.0);
+                cr.paint();
+
+                cr.set_source_rgba(1.0, 1.0, 1.0, 0.5);
+                cr.arc(center, center, radius, 0.0, 2.0 * std::f64::consts::PI);
+                cr.fill();
+            }
+
             Inhibit(false)
         });
 
