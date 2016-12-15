@@ -342,6 +342,9 @@ fn main() {
                     if animation_step > 0 && !mouse_drag_in.get() {
                         Continue(true)
                     } else {
+                        for icon in icons.borrow().iter() {
+                            icon.hide();
+                        }
                         Continue(false)
                     }
                 }
