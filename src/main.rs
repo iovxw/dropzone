@@ -1,5 +1,3 @@
-#![feature(inclusive_range_syntax)]
-
 extern crate gtk;
 extern crate gtk_sys;
 extern crate gdk;
@@ -66,7 +64,7 @@ fn cairo_image_surface_blur_alpha(surface: &mut cairo::ImageSurface, sigma: f64)
         for x in 0..width {
             sum = 0.0;
             let mut amul = 0.0;
-            for i in -kcenter...kcenter {
+            for i in -kcenter..kcenter + 1 {
                 if (x + i) >= 0 && (x + i) < width {
                     amul += src[(y * src_stride + (x + i) * 4 + 3) as usize] as f64 *
                             kernel[(kcenter + i) as usize];
@@ -81,7 +79,7 @@ fn cairo_image_surface_blur_alpha(surface: &mut cairo::ImageSurface, sigma: f64)
         for y in 0..height {
             sum = 0.0;
             let mut amul = 0.0;
-            for i in -kcenter...kcenter {
+            for i in -kcenter..kcenter + 1 {
                 if (y + i) >= 0 && (y + i) < height {
                     amul += src[((y + i) * src_stride + x * 4 + 3) as usize] as f64 *
                             kernel[(kcenter + i) as usize];
@@ -453,10 +451,8 @@ fn main() {
     icons_box.connect_drag_leave({
         let mouse_drag_in = mouse_drag_in.clone();
         let mouse_leave_animation = mouse_leave_animation.clone();
-        move |_, _, i| {
-            if i == 0 && mouse_drag_in.get() {
-                mouse_leave_animation();
-            }
+        move |_, _, i| if i == 0 && mouse_drag_in.get() {
+            mouse_leave_animation();
         }
     });
 
