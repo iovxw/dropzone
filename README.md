@@ -1,6 +1,8 @@
 # Dropzone
 
-...
+Just a demo now
+
+![screenshot.gif](screenshot.gif)
 
 ## License
 
