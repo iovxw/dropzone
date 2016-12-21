@@ -4,6 +4,21 @@ Just a demo now
 
 ![screenshot.gif](screenshot.gif)
 
+## Build and Run
+
+**Dependencies:**
+- Rust
+- Cargo
+- GTK+ 3
+
+```shell
+git clone https://github.com/iovxw/dropzone.git
+cd dropzone
+
+cargo build --release
+./target/release/dropzone
+```
+
 ## License
 
 This is free and unencumbered software released into the public domain.
